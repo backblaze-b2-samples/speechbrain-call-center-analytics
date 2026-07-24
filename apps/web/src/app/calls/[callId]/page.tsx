@@ -142,10 +142,20 @@ export default function CallDetailPage() {
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
         <TabsContent value="transcript" className="mt-4">
-          <TranscriptViewer callId={callId} enabled={done} />
+          <TranscriptViewer
+            callId={callId}
+            enabled={done}
+            processing={processing}
+            stage={call.stage}
+          />
         </TabsContent>
         <TabsContent value="analytics" className="mt-4">
-          <AnalyticsPanel callId={callId} enabled={done} />
+          <AnalyticsPanel
+            callId={callId}
+            enabled={done}
+            processing={processing}
+            stage={call.stage}
+          />
         </TabsContent>
       </Tabs>
 

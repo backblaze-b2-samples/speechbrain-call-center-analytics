@@ -48,3 +48,15 @@ Known tech debt items. Agents update this when they discover or create tech debt
 | Custom `FileNotFoundError` shadowed the built-in | Renamed to `FileNotFoundServiceError` |
 | Dropzone accepted any file type client-side | `accept` allow-list mirroring backend `ALLOWED_TYPES` (tested for drift) |
 | No test harness for feature specs | pytest suite across upload, files, activity, errors, validation, rate limit, pagination |
+
+## 2026-07-24 — verify
+
+Nitpicks/tech-debt surfaced by the sample-3-verify UX funnel (feature verified PASS; blockers/frictions were fixed in the same run — see the verify commit). These are backlog-only, not loop items:
+
+- Dashboard — "Artifacts on B2 · 4× per recording" (counts recording + meta.json + transcript.jsonl + analytics.json) → the README markets a "3× fan-out" (derived artifacts only); align the copy one way (.local/verify/C/10-dashboard-after.png).
+- Call Library (filtered) — filtering to a date with no calls shows "No calls yet — Ingest a recording…" → doesn't distinguish an empty library from a filter with no matches; a filtered-empty variant ("No calls on this date") reads more precisely (.local/verify/B/03-empty-state.png).
+- Call detail (after reload) — the sidebar highlights "Dashboard" as active on the `/calls/{id}` route → active-nav highlight should resolve to "Calls" (.local/verify/B/07-reload-during-processing.png).
+- Call detail transcript — per-segment emotion shown as raw uppercase codes ANG/NEU/HAP with no legend → add a legend/tooltip so a first-time user can decode them (.local/verify/B/08-done-transcript.png).
+- Call detail transcript — IEMOCAP emotion labels are frequently implausible on telephony audio (e.g. a polite greeting tagged ANG) → model-quality limitation of emotion-recognition-wav2vec2-IEMOCAP, not a pipeline defect; consider a confidence threshold or a caveat in the UI (.local/verify/C/04-run1-transcript.png).
+- Re-analyze (done call) — clicking Re-analyze fires analysis (toast shows) but the detail page keeps showing the stale Done transcript until a manual reload → same root-cause family as the fixed uploaded-window poll race; deterministic fix = an optimistic cache write in `useAnalyzeCall.onSuccess` setting the cached call to `processing` so polling re-engages (no shot; source: apps/web/src/lib/queries.ts).
+- Call Library list poll — `useCalls` polls only while a call is `processing`; a library containing only a freshly-created `uploaded` call (nothing else processing) won't auto-refresh until navigation → extend the list poll to non-terminal statuses (uploaded OR processing), mirroring the detail-page `callPollInterval` fix (no shot; source: apps/web/src/lib/queries.ts).

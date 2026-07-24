@@ -29,7 +29,6 @@ from app.service.calls import (
     update_call,
 )
 from app.types.calls import (
-    AsrQuality,
     Call,
     CallAnalytics,
     CallStats,
@@ -61,7 +60,6 @@ async def create_call_endpoint(
     date: str = Form(...),
     language: str = Form("en"),
     expected_speakers: SpeakerCount = Form(SpeakerCount.two),
-    asr_quality: AsrQuality = Form(AsrQuality.fast),
     agent_label: str = Form("Agent"),
     customer_label: str = Form("Customer"),
     compliance_keywords: str = Form(""),
@@ -87,7 +85,7 @@ async def create_call_endpoint(
     keywords = [k.strip() for k in compliance_keywords.split(",") if k.strip()]
     req = CreateCallRequest(
         title=title, queue=queue, date=date, language=language,
-        expected_speakers=expected_speakers, asr_quality=asr_quality,
+        expected_speakers=expected_speakers,
         agent_label=agent_label, customer_label=customer_label,
         compliance_keywords=keywords or None, notes=notes,
     )

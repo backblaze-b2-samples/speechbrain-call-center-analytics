@@ -7,6 +7,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { useCallTranscript } from "@/lib/queries";
+import { ProcessingPanel } from "./processing-panel";
+import type { PipelineStage } from "@speechbrain-call-center-analytics/shared";
 
 const SPEAKER_COLORS = [
   "var(--chart-1)",
@@ -24,9 +26,13 @@ function mmss(seconds: number): string {
 export function TranscriptViewer({
   callId,
   enabled,
+  processing = false,
+  stage = null,
 }: {
   callId: string;
   enabled: boolean;
+  processing?: boolean;
+  stage?: PipelineStage | null;
 }) {
   const { data: segments = [], isLoading, error, refetch } = useCallTranscript(
     callId,
@@ -44,6 +50,9 @@ export function TranscriptViewer({
     return map;
   }, [segments]);
 
+  if (processing) {
+    return <ProcessingPanel stage={stage} />;
+  }
   if (!enabled) {
     return (
       <EmptyState

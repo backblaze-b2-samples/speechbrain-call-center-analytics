@@ -24,6 +24,7 @@ import {
 import type {
   Call,
   CallAnalytics,
+  CallStatus,
   CreateCallInput,
   FileMetadata,
   FileMetadataDetail,
@@ -141,13 +142,25 @@ export function useCalls(queue?: string, date?: string) {
   });
 }
 
+// Poll interval (ms) for a single call's detail view. Poll while the call is in
+// ANY non-terminal state — `uploaded` (the brief window after create+analyze,
+// before the background task flips it to `processing`) as well as `processing`
+// — so a detail page whose first fetch lands during the `uploaded` window keeps
+// re-fetching and picks up processing->done without a manual reload. Terminal
+// states (`done`/`error`) stop polling, and an unloaded query (status
+// `undefined`) does not poll (avoids hammering a 404).
+const CALL_POLL_MS = 3000;
+
+export function callPollInterval(status: CallStatus | undefined): number | false {
+  return status === "uploaded" || status === "processing" ? CALL_POLL_MS : false;
+}
+
 export function useCall(callId: string | undefined) {
   return useQuery<Call, ApiError>({
     queryKey: qk.call(callId ?? ""),
     queryFn: () => getCall(callId as string),
     enabled: !!callId,
-    refetchInterval: (query) =>
-      query.state.data?.status === "processing" ? 3000 : false,
+    refetchInterval: (query) => callPollInterval(query.state.data?.status),
   });
 }
 

@@ -9,7 +9,7 @@ surfaces.
 
 - User navigates to `/calls/new`
 - Picks a WAV/MP3 recording and fills metadata: title, queue (selector),
-  date (defaults to today), expected speakers (radio), ASR quality (selector),
+  date (defaults to today), expected speakers (radio),
   agent/customer labels, compliance keywords, notes
 - Submitting `POST /calls` writes the recording + `meta.json` under
   `calls/{date}/{queue}/{callId}/`; "Run analysis immediately" (default on)
@@ -20,7 +20,10 @@ surfaces.
 ## Analyze & Review a Call
 
 - On `/calls/[callId]` the user clicks **Analyze** (or **Re-analyze**)
-- Status shows **Processing**; the page polls until **Done** (or **Error**)
+- Status shows **Processing**; the page polls until **Done** (or **Error**).
+  While processing, the Transcript/Analytics tabs show an advancing stage
+  indicator (segmentation → transcription → diarization → analytics) driven by
+  the `stage` the backend records into `meta.json` — not the idle empty state
 - Transcript tab: timestamped, speaker-colored segments with per-segment emotion
 - Analytics tab: sentiment score/label, talk-time split, silence ratio,
   flagged compliance phrases

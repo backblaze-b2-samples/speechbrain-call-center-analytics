@@ -8,6 +8,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { useCallAnalytics } from "@/lib/queries";
 import { SentimentBadge } from "./call-badges";
+import { ProcessingPanel } from "./processing-panel";
+import type { PipelineStage } from "@speechbrain-call-center-analytics/shared";
 
 const TALK_COLORS = [
   "var(--chart-1)",
@@ -36,12 +38,19 @@ function Metric({ label, value }: { label: string; value: string }) {
 export function AnalyticsPanel({
   callId,
   enabled,
+  processing = false,
+  stage = null,
 }: {
   callId: string;
   enabled: boolean;
+  processing?: boolean;
+  stage?: PipelineStage | null;
 }) {
   const { data, isLoading, error } = useCallAnalytics(callId, enabled);
 
+  if (processing) {
+    return <ProcessingPanel stage={stage} />;
+  }
   if (!enabled || error) {
     return (
       <EmptyState

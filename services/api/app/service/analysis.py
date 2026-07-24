@@ -28,8 +28,10 @@ from app.service.calls import (
 )
 from app.types.calls import (
     CallAnalytics,
+    CallMeta,
     CallStatus,
     FlaggedPhrase,
+    PipelineStage,
     SpeakerCount,
     TranscriptSegment,
 )
@@ -50,6 +52,15 @@ _VALENCE = {
 _MIN_SEG_SEC = 0.1
 
 
+def _set_stage(meta: CallMeta, stage: PipelineStage) -> None:
+    """Persist the current pipeline stage so the polling detail page can render
+    a determinate, advancing progress indicator. Lightweight: one meta.json
+    patch per stage boundary — the ML pipeline itself is untouched."""
+    meta.stage = stage
+    meta.updated_at = datetime.now(UTC)
+    write_meta(meta)
+
+
 def analyze_call(call_id: str) -> None:
     """Entry point (runs inside a FastAPI BackgroundTask). Serialized by a
     semaphore so concurrent runs don't exhaust memory."""
@@ -60,6 +71,7 @@ def analyze_call(call_id: str) -> None:
 def _run(call_id: str) -> None:
     meta = load_call(call_id)
     meta.status = CallStatus.processing
+    meta.stage = PipelineStage.segmentation
     meta.error = None
     meta.updated_at = datetime.now(UTC)
     write_meta(meta)
@@ -76,11 +88,13 @@ def _run(call_id: str) -> None:
         if not boundaries:
             boundaries = [(0.0, duration)]
 
+        _set_stage(meta, PipelineStage.transcription)
         segs = _analyze_segments(waveform, sr, boundaries)
         if not segs:
             segs = [(0.0, duration, speech_engine.transcribe(waveform),
                      speech_engine.embed(waveform), speech_engine.emotion(waveform))]
 
+        _set_stage(meta, PipelineStage.diarization)
         labels = _cluster([s[3] for s in segs], meta.expected_speakers)
         names = _speaker_names(labels, segs, meta)
         transcript = [
@@ -96,6 +110,7 @@ def _run(call_id: str) -> None:
             ("\n".join(json_line(t) for t in transcript)).encode("utf-8"),
             "application/x-ndjson",
         )
+        _set_stage(meta, PipelineStage.analytics)
         analytics = _analytics(transcript, duration, compliance_keywords_for(meta))
         put_bytes(
             prefix + "analytics.json",
@@ -104,9 +119,11 @@ def _run(call_id: str) -> None:
         )
 
         meta.status = CallStatus.done
+        meta.stage = None
         meta.duration_sec = duration
         meta.num_speakers = analytics.num_speakers
         meta.sentiment_label = analytics.sentiment_label
+        meta.sentiment_score = analytics.sentiment_score
         meta.updated_at = datetime.now(UTC)
         write_meta(meta)
         logger.info("Analysis done: call=%s speakers=%d", call_id, analytics.num_speakers)
@@ -114,6 +131,7 @@ def _run(call_id: str) -> None:
         # Record the failure into the entity; a broken recording must not crash
         # the background task or leave the call stuck in "processing".
         meta.status = CallStatus.error
+        meta.stage = None
         meta.error = str(e)[:500]
         meta.updated_at = datetime.now(UTC)
         write_meta(meta)

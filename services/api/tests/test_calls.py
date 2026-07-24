@@ -6,12 +6,15 @@ in-memory dict, so no network or credentials are needed. The clustering +
 analytics math runs for real against the canned embeddings.
 """
 
+from datetime import UTC, datetime
+
 import numpy as np
 import pytest
 
 from app.repo import audio_io, speech_engine
 from app.service import analysis as analysis_service
 from app.service import calls as calls_service
+from app.types.calls import CallMeta, CallStatus, Queue
 
 
 @pytest.fixture
@@ -81,7 +84,6 @@ def _create_via_api(client):
             "queue": "support",
             "date": "2026-07-23",
             "expected_speakers": "2",
-            "asr_quality": "fast",
             "compliance_keywords": "refund,complaint",
         },
     )
@@ -144,6 +146,11 @@ async def test_analysis_status_flow_and_artifacts(client, store, fake_engine):
     assert body["status"] == "done"
     assert body["num_speakers"] == 2
     assert body["duration_sec"] == pytest.approx(4.0, abs=0.1)
+    # Stage is cleared on a terminal status; the continuous sentiment score is
+    # denormalized into meta.json so the dashboard can average the real score.
+    assert body["stage"] is None
+    assert body["sentiment_score"] is not None
+    assert -1.0 <= body["sentiment_score"] <= 1.0
 
     transcript = (await client.get(f"/calls/{call_id}/transcript")).json()
     assert len(transcript) == 2
@@ -175,3 +182,69 @@ async def test_call_stats_reports_fanout(client, store, fake_engine):
     # recording + meta + transcript + analytics = 4 objects for 1 recording.
     assert stats["artifacts_written"] == 4
     assert stats["fan_out_ratio"] == pytest.approx(4.0)
+
+
+@pytest.mark.asyncio
+async def test_avg_sentiment_is_continuous_mean_not_label_rounded(client, store):
+    """C2: the dashboard 'Avg Sentiment' averages the continuous per-call
+    sentiment_score, not the discrete label->number map. A legacy call with only
+    a label (no numeric score) falls back to the label map."""
+    now = datetime.now(UTC)
+
+    def _seed(call_id: str, label: str, score: float | None) -> None:
+        meta = CallMeta(
+            call_id=call_id,
+            title=call_id,
+            queue=Queue.support,
+            date="2026-07-23",
+            status=CallStatus.done,
+            recording_key=f"calls/2026-07-23/support/{call_id}/recording.wav",
+            recording_filename="recording.wav",
+            sentiment_label=label,
+            sentiment_score=score,
+            created_at=now,
+            updated_at=now,
+        )
+        calls_service.write_meta(meta)
+
+    # Two negative-labeled calls carry distinct continuous scores; one legacy
+    # call has only a label and no numeric score (-> falls back to 0.0).
+    _seed("aaaaaaaaaaaa", "negative", -0.46)
+    _seed("bbbbbbbbbbbb", "negative", -0.50)
+    _seed("cccccccccccc", "neutral", None)
+
+    stats = (await client.get("/calls/stats")).json()
+    # Continuous mean = (-0.46 + -0.50 + 0.0) / 3 = -0.32
+    assert stats["avg_sentiment"] == pytest.approx(-0.32, abs=1e-3)
+    # NOT the discrete label-rounded mean (-1 + -1 + 0) / 3 = -0.667
+    assert abs(stats["avg_sentiment"] - (-0.667)) > 0.1
+
+
+@pytest.mark.asyncio
+async def test_pipeline_records_advancing_stage(client, store, fake_engine, monkeypatch):
+    """B1/B2: the backend records each pipeline stage into meta.json in order
+    while processing, then clears it on the terminal status. This real signal is
+    what drives the detail page's advancing progress indicator."""
+    created = await _create_via_api(client)
+    call_id = created.json()["call_id"]
+
+    stages_seen: list[str | None] = []
+    orig_write = analysis_service.write_meta
+
+    def _capture(meta):
+        stages_seen.append(meta.stage.value if meta.stage else None)
+        return orig_write(meta)
+
+    monkeypatch.setattr(analysis_service, "write_meta", _capture)
+    analysis_service.analyze_call(call_id)
+
+    for name in ("segmentation", "transcription", "diarization", "analytics"):
+        assert name in stages_seen, f"stage {name!r} never recorded: {stages_seen}"
+    assert (
+        stages_seen.index("segmentation")
+        < stages_seen.index("transcription")
+        < stages_seen.index("diarization")
+        < stages_seen.index("analytics")
+    )
+    # Stage is cleared (None) once the run reaches a terminal status.
+    assert stages_seen[-1] is None

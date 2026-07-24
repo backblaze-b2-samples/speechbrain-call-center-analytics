@@ -12,14 +12,17 @@ Run a fully-local SpeechBrain pipeline over a call recording to produce a timest
 - `services/api/app/repo/speech_engine.py` — the sole `torch`/`torchaudio`/`speechbrain` home: `segment` (VAD), `transcribe` (wav2vec2 ASR), `embed` (ECAPA), `emotion`; `get_device` (CUDA→MPS→CPU autodetect)
 - `services/api/app/repo/audio_io.py` — decode + resample to 16 kHz mono
 - `services/api/app/service/analysis.py` — orchestration + `_cluster` (scikit-learn `AgglomerativeClustering`) + speaker labeling
-- `apps/web/src/lib/queries.ts` — `useAnalyzeCall`, `useCall` (polls while `processing`), `useCallTranscript`
+- `apps/web/src/lib/queries.ts` — `useAnalyzeCall`, `useCall` (polls while the call is non-terminal — `uploaded` or `processing` — so it never stalls on the brief post-create `uploaded` window), `useCallTranscript`
 
 ## Inputs
-- The call's `recording.*` from B2, plus `meta.expected_speakers` ({2, 3, auto}) and `asr_quality`
+- The call's `recording.*` from B2, plus `meta.expected_speakers` ({2, 3, auto})
 
 ## Outputs
 - `transcript.jsonl` written to the call prefix — one `{start, end, speaker, text, emotion}` per line
-- `meta.json` updated: `status=done` (or `error`), `duration_sec`, `num_speakers`
+- `meta.json` updated: `status` (uploaded → processing → done/`error`) and a
+  `stage` field (segmentation → transcription → diarization → analytics, patched
+  as each stage begins and cleared to `null` on a terminal status); on
+  completion `duration_sec`, `num_speakers`, `sentiment_label`, `sentiment_score`
 - Side effect: ~1–2 GB one-time model download (cached, non-gated)
 
 ## Flow
@@ -37,7 +40,10 @@ Run a fully-local SpeechBrain pipeline over a call recording to produce a timest
 
 ## UX States
 - Empty: "No transcript yet — run analysis"
-- Loading: detail page polls while `processing`; transcript skeletons
+- Processing: the Transcript/Analytics tab bodies show a distinct in-progress
+  panel (not the idle empty state) — a spinner plus an advancing 4-stage
+  checklist (segmentation → transcription → diarization → analytics) driven by
+  `meta.stage` as the detail page polls
 - Error: destructive alert with `meta.error`; Re-analyze available
 
 ## Verification

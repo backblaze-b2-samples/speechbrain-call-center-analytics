@@ -38,7 +38,6 @@ const schema = z.object({
   queue: z.enum(QUEUES),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
   expected_speakers: z.enum(["2", "3", "auto"]),
-  asr_quality: z.enum(["fast", "accurate"]),
   agent_label: z.string().min(1, "Required").max(60),
   customer_label: z.string().min(1, "Required").max(60),
   compliance_keywords: z.string().max(500),
@@ -75,7 +74,6 @@ export function CallForm({
       queue: call?.queue ?? "support",
       date: call?.date ?? today(),
       expected_speakers: call?.expected_speakers ?? "2",
-      asr_quality: call?.asr_quality ?? "fast",
       agent_label: call?.agent_label ?? "Agent",
       customer_label: call?.customer_label ?? "Customer",
       compliance_keywords: (call?.compliance_keywords ?? []).join(", "),
@@ -97,7 +95,6 @@ export function CallForm({
             queue: values.queue,
             date: values.date,
             expected_speakers: values.expected_speakers,
-            asr_quality: values.asr_quality,
             agent_label: values.agent_label,
             customer_label: values.customer_label,
             compliance_keywords: values.compliance_keywords,
@@ -113,7 +110,6 @@ export function CallForm({
           patch: {
             title: values.title,
             expected_speakers: values.expected_speakers,
-            asr_quality: values.asr_quality,
             agent_label: values.agent_label,
             customer_label: values.customer_label,
             compliance_keywords: values.compliance_keywords
@@ -261,31 +257,7 @@ export function CallForm({
           )}
         />
 
-        <div className="grid gap-6 sm:grid-cols-3">
-          <FormField
-            control={form.control}
-            name="asr_quality"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>ASR quality</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="fast">Fast</SelectItem>
-                    <SelectItem value="accurate">Accurate</SelectItem>
-                  </SelectContent>
-                </Select>
-                {isCreate && (
-                  <FormDescription>Fast is recommended for 8–16 kHz telephony.</FormDescription>
-                )}
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+        <div className="grid gap-6 sm:grid-cols-2">
           <FormField
             control={form.control}
             name="agent_label"

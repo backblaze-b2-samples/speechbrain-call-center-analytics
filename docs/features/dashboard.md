@@ -28,7 +28,7 @@ An at-a-glance QA overview of the call-analytics workflow — throughput, audio 
 
 ## Flow
 - Page loads → two queries (stats, recent calls)
-- Cards: Calls Processed, Audio Ingested (hours), Artifacts on B2 (with the ×fan-out ratio — the "3× per recording" story), Avg Sentiment
+- Cards: Calls Processed, Audio Ingested (hours), Artifacts on B2 (with the ×fan-out ratio — the "3× per recording" story), Avg Sentiment (the mean of the continuous per-call `sentiment_score`, matching the -1..+1 scale each call's Analytics shows; falls back to the discrete label only for calls with no numeric score)
 - Chart: calls grouped by queue
 - Table: most-recent calls with queue, sentiment, status (click-through to detail)
 

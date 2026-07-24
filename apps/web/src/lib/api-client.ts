@@ -278,7 +278,6 @@ export function createCall(
     form.append("queue", input.queue);
     form.append("date", input.date);
     form.append("expected_speakers", input.expected_speakers);
-    form.append("asr_quality", input.asr_quality);
     form.append("agent_label", input.agent_label);
     form.append("customer_label", input.customer_label);
     form.append("compliance_keywords", input.compliance_keywords);

@@ -124,7 +124,6 @@ def create_call(
         date=req.date,
         language=req.language,
         expected_speakers=req.expected_speakers,
-        asr_quality=req.asr_quality,
         agent_label=req.agent_label,
         customer_label=req.customer_label,
         compliance_keywords=req.compliance_keywords or [],
@@ -229,7 +228,7 @@ def get_call_stats() -> CallStats:
     recordings = sum(1 for m in metas)
     artifacts = len(all_objs)  # recordings + meta + transcript + analytics
     audio_hours = sum((m.duration_sec or 0) for m in metas) / 3600.0
-    sentiments = [_sentiment_num(m.sentiment_label) for m in metas if m.sentiment_label]
+    sentiments = [v for m in metas if (v := _sentiment_value(m)) is not None]
     queue_breakdown: dict[str, int] = {}
     for m in metas:
         queue_breakdown[m.queue.value] = queue_breakdown.get(m.queue.value, 0) + 1
@@ -247,6 +246,19 @@ def get_call_stats() -> CallStats:
 
 def _sentiment_num(label: str) -> float:
     return {"positive": 1.0, "neutral": 0.0, "negative": -1.0}.get(label, 0.0)
+
+
+def _sentiment_value(meta: CallMeta) -> float | None:
+    """Per-call sentiment for the dashboard average, on the continuous -1..1
+    scale. Prefer the denormalized numeric ``sentiment_score`` so the average
+    matches the per-call Analytics figures; fall back to the discrete
+    label→number map only for calls that carry no numeric score (e.g. analyzed
+    before the score was denormalized). Un-analyzed calls contribute nothing."""
+    if meta.sentiment_score is not None:
+        return meta.sentiment_score
+    if meta.sentiment_label:
+        return _sentiment_num(meta.sentiment_label)
+    return None
 
 
 def compliance_keywords_for(meta: CallMeta) -> list[str]:

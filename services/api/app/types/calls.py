@@ -30,13 +30,6 @@ class SpeakerCount(StrEnum):
     auto = "auto"  # estimate the count from the embeddings
 
 
-class AsrQuality(StrEnum):
-    """ASR quality/speed tradeoff."""
-
-    fast = "fast"
-    accurate = "accurate"
-
-
 class CallStatus(StrEnum):
     """Lifecycle status stored in meta.json — drives the detail-page poll."""
 
@@ -44,6 +37,17 @@ class CallStatus(StrEnum):
     processing = "processing"
     done = "done"
     error = "error"
+
+
+class PipelineStage(StrEnum):
+    """Current analysis stage, written to meta.json while status == processing
+    (cleared to None on a terminal status). Drives the detail-page progress
+    indicator. Order: segmentation -> transcription -> diarization -> analytics."""
+
+    segmentation = "segmentation"
+    transcription = "transcription"
+    diarization = "diarization"
+    analytics = "analytics"
 
 
 class CreateCallRequest(BaseModel):
@@ -54,7 +58,6 @@ class CreateCallRequest(BaseModel):
     date: str  # YYYY-MM-DD (immutable — part of the object key)
     language: str = "en"
     expected_speakers: SpeakerCount = SpeakerCount.two
-    asr_quality: AsrQuality = AsrQuality.fast
     agent_label: str = "Agent"
     customer_label: str = "Customer"
     compliance_keywords: list[str] | None = None
@@ -67,7 +70,6 @@ class UpdateCallRequest(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     language: str | None = None
     expected_speakers: SpeakerCount | None = None
-    asr_quality: AsrQuality | None = None
     agent_label: str | None = None
     customer_label: str | None = None
     compliance_keywords: list[str] | None = None
@@ -83,12 +85,14 @@ class CallMeta(BaseModel):
     date: str
     language: str = "en"
     expected_speakers: SpeakerCount = SpeakerCount.two
-    asr_quality: AsrQuality = AsrQuality.fast
     agent_label: str = "Agent"
     customer_label: str = "Customer"
     compliance_keywords: list[str] = Field(default_factory=list)
     notes: str = ""
     status: CallStatus = CallStatus.uploaded
+    # Current pipeline stage while status == processing; None on a terminal
+    # status. Drives the detail-page progress indicator.
+    stage: PipelineStage | None = None
     recording_key: str
     recording_filename: str
     duration_sec: float | None = None
@@ -96,6 +100,9 @@ class CallMeta(BaseModel):
     # completes so the Call Library table lists without reading analytics.json.
     num_speakers: int | None = None
     sentiment_label: str | None = None
+    # Continuous per-call sentiment in [-1, 1] (mirrors analytics.sentiment_score),
+    # denormalized so the dashboard averages the real score, not the label.
+    sentiment_score: float | None = None
     error: str | None = None
     created_at: datetime
     updated_at: datetime

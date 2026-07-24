@@ -20,7 +20,7 @@ Roll the per-segment pipeline output into a per-call analytics summary — senti
 
 ## Outputs
 - `analytics.json` written to the call prefix: `num_speakers`, `duration_sec`, `sentiment_score` (-1..1), `sentiment_label`, `silence_ratio`, `talk_time` (per speaker seconds), `flagged_phrases`, `emotions`
-- `meta.json` updated with the denormalized `sentiment_label` (for the library table)
+- `meta.json` updated with the denormalized `sentiment_label` (for the library table) and `sentiment_score` — the continuous -1..1 score, denormalized so the dashboard "Avg Sentiment" averages the real per-call scores rather than the discrete labels
 
 ## Flow
 - Map each segment's emotion to a valence (hap/neu/sad/ang…), duration-weight, average → `sentiment_score` → label (>0.15 positive, <-0.15 negative, else neutral)

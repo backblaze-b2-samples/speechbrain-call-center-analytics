@@ -16,7 +16,7 @@ Upload a telephony recording with call metadata into a `date/queue` prefix on B2
 
 ## Inputs
 - `file`: UploadFile (WAV/MP3 telephony audio)
-- `title`, `queue`, `date` (YYYY-MM-DD), `expected_speakers`, `asr_quality`, `agent_label`, `customer_label`, `compliance_keywords` (comma-separated), `notes`: Form fields
+- `title`, `queue`, `date` (YYYY-MM-DD), `expected_speakers`, `agent_label`, `customer_label`, `compliance_keywords` (comma-separated), `notes`: Form fields
 - `analyze`: bool — kick off analysis immediately after ingest
 
 ## Outputs
@@ -24,7 +24,7 @@ Upload a telephony recording with call metadata into a `date/queue` prefix on B2
 - Side effects: writes `calls/{date}/{queue}/{callId}/recording.*` and `meta.json` to B2
 
 ## Flow
-- User picks a recording and fills metadata (queue/speakers/quality are selectors; create-only safe-default hints shown)
+- User picks a recording and fills metadata (queue/speakers are selectors; create-only safe-default hints shown)
 - `POST /calls` streams the file (413 over `max_file_size`), validates the audio content type
 - `create_call` mints a `callId`, writes the recording then `meta.json`
 - On success the UI routes to `/calls/{callId}`; if `analyze` was checked, the run starts

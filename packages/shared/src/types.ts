@@ -67,8 +67,14 @@ export type CallQueue =
   | "retention"
   | "collections";
 export type SpeakerCount = "2" | "3" | "auto";
-export type AsrQuality = "fast" | "accurate";
 export type CallStatus = "uploaded" | "processing" | "done" | "error";
+// Ordered analysis stages the backend records in meta.json while a call is
+// processing; drives the detail-page progress indicator.
+export type PipelineStage =
+  | "segmentation"
+  | "transcription"
+  | "diarization"
+  | "analytics";
 
 export interface Call {
   call_id: string;
@@ -77,17 +83,18 @@ export interface Call {
   date: string;
   language: string;
   expected_speakers: SpeakerCount;
-  asr_quality: AsrQuality;
   agent_label: string;
   customer_label: string;
   compliance_keywords: string[];
   notes: string;
   status: CallStatus;
+  stage: PipelineStage | null;
   recording_key: string;
   recording_filename: string;
   duration_sec: number | null;
   num_speakers: number | null;
   sentiment_label: string | null;
+  sentiment_score: number | null;
   error: string | null;
   created_at: string;
   updated_at: string;
@@ -134,7 +141,6 @@ export interface CreateCallInput {
   queue: CallQueue;
   date: string;
   expected_speakers: SpeakerCount;
-  asr_quality: AsrQuality;
   agent_label: string;
   customer_label: string;
   compliance_keywords: string;
@@ -146,7 +152,6 @@ export interface UpdateCallInput {
   title?: string;
   language?: string;
   expected_speakers?: SpeakerCount;
-  asr_quality?: AsrQuality;
   agent_label?: string;
   customer_label?: string;
   compliance_keywords?: string[];
