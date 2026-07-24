@@ -1,96 +1,73 @@
-<!-- last_verified: 2026-07-15 -->
-# Vibe Coding Starter Kit
+<!-- last_verified: 2026-07-23 -->
+# SpeechBrain Call Center Analytics
 
-Stop wiring boilerplate and start building. This open-source starter kit gives vibe coders and AI coding agents a production-ready foundation — a full-stack TypeScript + Python template with a pre-built dashboard UI, file upload system, and **[Backblaze B2](https://www.backblaze.com/sign-up/ai-cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-start)** cloud storage already integrated. Save thousands of tokens on setup prompts, skip the "build me a dashboard from scratch" loop, and go straight to building your app's unique features.
+Turn a pile of call recordings into searchable, speaker-labeled transcripts and
+per-call analytics — **entirely on-device** with [SpeechBrain](https://speechbrain.github.io/),
+storing every recording and derived artifact on
+**[Backblaze B2](https://www.backblaze.com/cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-speechbrain-call-center)**.
 
-**What you get out of the box:**
-- Full-stack dashboard UI (Next.js 16 + React 19 + Tailwind v4 + shadcn/ui)
-- File upload with drag-and-drop, progress tracking, and metadata extraction
-- File browser with preview, download, and delete
-- FastAPI backend with strict layered architecture and structural tests
-- Agent-optimized docs — your AI coding agent can read the repo and start contributing immediately
+Built for contact-center / CX teams and insurance-fintech QA orgs that need to
+process large archives of telephony audio. Upload a call, run the local pipeline
+— **voice-activity segmentation → ASR transcription → speaker diarization →
+per-segment emotion/sentiment** — and the app writes a timestamped
+speaker-labeled `transcript.jsonl` and a per-call `analytics.json` back to B2
+**alongside the source recording**. One recording in becomes three objects out,
+roughly tripling stored data per call. QA dashboards, compliance review, and
+retraining pipelines then read recordings + artifacts straight from B2 over the
+**S3-compatible API**, using a `calls/{date}/{queue}/` prefix layout as the index.
 
-## What it looks like
+**No second API key. B2 credentials only — everything else runs on your hardware.**
 
-**Dashboard** — stats, upload activity, and recent uploads at a glance:
+## What you get
 
-![Dashboard view showing stat cards, upload activity chart, and recent uploads table](docs/images/b2-starterkit-dashboard1.png)
+- **Call ingest** — upload WAV/MP3 telephony audio with metadata into a
+  `date/queue` prefix on B2.
+- **Transcription & diarization (local)** — SpeechBrain VAD + wav2vec2 ASR +
+  ECAPA speaker embeddings clustered into speakers, producing a timestamped,
+  speaker-labeled transcript.
+- **Call analytics (local)** — per-segment emotion rolled into a call sentiment
+  score, configurable compliance-keyword flagging, silence ratio, and
+  agent/customer talk-time split.
+- **Call Library** — a sample-scoped asset explorer over the `calls/` prefix
+  with queue/date filters and per-call status.
+- **QA dashboard** — calls processed, audio hours ingested, artifacts written
+  (the 3× fan-out), average sentiment, and a queue breakdown.
+- The reusable starter scaffolding: a full-bucket **Files** browser, generic
+  **Upload**, layered FastAPI backend with structural tests, `/health`,
+  `/metrics`, per-IP rate limiting, and the shadcn/ui design system.
 
-**File browser** — tree view with preview, download, and delete:
+## How the pipeline runs (CPU / GPU)
 
-![File browser view showing a tree of files with hover actions](docs/images/b2-starterkit-fileview2.png)
+The SpeechBrain models run locally. Device is **auto-detected at runtime** —
+the first available of **CUDA → Apple MPS → CPU**, defaulting to CPU. No GPU is
+required. Pin it with `SPEECHBRAIN_DEVICE` if needed.
 
-## Agent-First Architecture
+> **MPS caveat:** wav2vec2 / SpeechBrain have incomplete Apple-MPS operator
+> coverage. If an op fails on MPS the engine transparently demotes to CPU and
+> retries; set `SPEECHBRAIN_DEVICE=cpu` to skip MPS entirely. In practice the
+> sample runs CUDA → CPU on most hosts.
 
-This repo is optimized for coding agents. Use the template, point your agent at it, and start building.
+> **First run downloads ~1–2 GB of SpeechBrain models** (cached under
+> `~/.cache/sb-ccanalytics`, override with `SPEECHBRAIN_CACHE`). All four models
+> are **non-gated** — no Hugging Face token and no terms to accept.
 
-The structure follows the principle that **repository knowledge is the system of record**. Anything an agent can't access in-context doesn't exist — so everything it needs to reason about the codebase is versioned, co-located, and discoverable from the repo itself.
+## Four non-gated models
 
-### How it works
+| Stage | Model |
+|-------|-------|
+| Voice-activity segmentation | `speechbrain/vad-crdnn-libriparty` |
+| ASR transcription | `speechbrain/asr-wav2vec2-commonvoice-14-en` |
+| Speaker embeddings (diarization) | `speechbrain/spkrec-ecapa-voxceleb` |
+| Emotion recognition | `speechbrain/emotion-recognition-wav2vec2-IEMOCAP` |
 
-**[AGENTS.md](AGENTS.md) is the single source of truth for all coding agents.** A ~100 line entry point gives agents the repository layout, architectural invariants, commands, conventions, and pointers to deeper docs. Agent-specific files (CLAUDE.md, etc.) are thin pointers back to AGENTS.md.
-
-**Architecture is enforced mechanically, not by convention.** Layering rules, import boundaries, file size limits, and SDK containment are verified by structural tests and lints that run on every change. When rules are enforceable by code, agents follow them reliably.
-
-**The knowledge base is structured for progressive disclosure:**
-
-```
-AGENTS.md              Single source of truth — layout, invariants, commands, conventions
-ARCHITECTURE.md        System layout, layering rules, data flows
-docs/
-  features/            Feature docs (inputs, outputs, flows, edge cases)
-  app-workflows.md     User journeys
-  dev-workflows.md     Engineering workflows and testing
-  SECURITY.md          Security principles
-  RELIABILITY.md       Reliability expectations
-  exec-plans/          Execution plans and tech debt tracker
-```
-
-### Key design decisions
-
-| Principle | Implementation |
-|-----------|---------------|
-| Give agents a single source of truth | AGENTS.md ~100 lines — layout, invariants, commands, conventions |
-| Enforce invariants mechanically | Structural tests + ruff + ESLint verify boundaries |
-| DRY documentation | Each fact lives in one place; no redundant files to drift |
-| Strict layered architecture | `types -> config -> repo -> service -> runtime`, enforced by tests |
-| Prefer boring, composable libraries | stdlib logging over frameworks, Pydantic over ad-hoc validation |
-| Contain external SDKs | `boto3` only in `repo/` layer — verified by structural test |
-| Keep files agent-sized | 300-line limit per file, enforced by test |
-| Docs updated with code | Same-PR requirement prevents documentation rot |
-| Structured observability | JSON logging, `/metrics` endpoint, request tracing |
-
-This approach draws from [OpenAI's experience building with Codex](https://openai.com/index/harness-engineering/): agents work best in environments with strict boundaries, predictable structure, and progressive context disclosure.
+Diarization deliberately uses SpeechBrain's own ECAPA embeddings + clustering
+(scikit-learn `AgglomerativeClustering`) rather than pyannote, avoiding
+pyannote's gated-model terms-acceptance step.
 
 ## Quick Start
 
-You need: Node.js >= 20, pnpm >= 9, Python >= 3.11, and a free **[Backblaze B2 account](https://www.backblaze.com/sign-up/ai-cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-start)**.
-
-### Start a new project
-
-**Option 1: GitHub Template (recommended)**
-
-Click the green **"Use this template"** button at the top of this repo, name your project, then:
-
-```bash
-git clone https://github.com/yourorg/my-cool-app.git
-cd my-cool-app
-```
-
-**Option 2: Clone and reinitialize**
-
-```bash
-git clone https://github.com/backblaze-b2-samples/vibe-coding-starter-kit.git my-cool-app
-cd my-cool-app
-rm -rf .git
-git init
-git add .
-git commit -m "Initial commit from vibe-coding-starter-kit"
-```
-
-Either way you get a clean project with no upstream history — ready to push to your own repo and point your agent at it.
-
-### Setup
+You need: Node.js >= 20, pnpm >= 9, Python >= 3.11, and a free
+**[Backblaze B2 account](https://www.backblaze.com/cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-speechbrain-call-center)**.
 
 **1. Install dependencies**
 
@@ -103,28 +80,27 @@ pnpm install
 ```bash
 cd services/api
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt   # includes torch/torchaudio/speechbrain (large)
 cd ../..
 ```
 
 **3. Add your B2 credentials**
 
-Set up your local `.env`:
-
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` in your editor and keep it visible. Then head to the [Backblaze B2 dashboard](https://secure.backblaze.com/b2_buckets.htm?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-start) and:
+Open `.env`, then in the [Backblaze B2 dashboard](https://secure.backblaze.com/b2_buckets.htm?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-speechbrain-call-center):
 
-1. **Create a bucket.** B2 will show two values — paste each into `.env`:
+1. **Create a bucket** and paste its values into `.env`:
    - **Bucket Unique Name** → `B2_BUCKET_NAME`
-   - **Endpoint** → `B2_ENDPOINT`
-2. **Create an application key** with `Read and Write` permission. B2 will show two values — paste each into `.env`:
-   - **keyID** → `B2_KEY_ID`
-   - **applicationKey** → `B2_APPLICATION_KEY` *(only shown once — paste it now)*
+   - **Region** (e.g. `us-west-004`, shown on the bucket) → `B2_REGION`
+     *(the S3 endpoint `https://s3.<region>.backblazeb2.com` is derived from it)*
+2. **Create an application key** with `Read and Write`:
+   - **keyID** → `B2_APPLICATION_KEY_ID`
+   - **applicationKey** → `B2_APPLICATION_KEY` *(only shown once)*
 
-> Want a walkthrough? See the docs for [creating a bucket](https://www.backblaze.com/docs/cloud-storage-create-and-manage-buckets) and [creating app keys](https://www.backblaze.com/docs/cloud-storage-create-and-manage-app-keys).
+> Walkthroughs: [creating a bucket](https://www.backblaze.com/docs/cloud-storage-create-and-manage-buckets?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-speechbrain-call-center) · [creating app keys](https://www.backblaze.com/docs/cloud-storage-create-and-manage-app-keys?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-oss-speechbrain-call-center).
 
 **4. Run it**
 
@@ -132,43 +108,37 @@ Open `.env` in your editor and keep it visible. Then head to the [Backblaze B2 d
 pnpm dev
 ```
 
-That's it. Frontend at `localhost:3000`, API at `localhost:8000`. Upload a file and see it working. Interactive API docs (Swagger UI) are at `localhost:8000/docs`, with ReDoc at `/redoc`.
+Frontend at `localhost:3000`, API at `localhost:8000`. Go to **Calls → New call**,
+upload a recording, and watch the pipeline transcribe and analyze it. Interactive
+API docs (Swagger UI) at `localhost:8000/docs`.
 
-`pnpm dev` runs `pnpm doctor` first — a preflight check that catches the common setup gotchas (wrong Node/Python version, missing venv, missing or placeholder `.env`, ports already taken) and tells you exactly how to fix each one. Run it standalone any time with `pnpm doctor`.
+`pnpm dev` runs `pnpm doctor` first — a preflight check for the common setup
+gotchas (wrong Node/Python version, missing venv, missing/placeholder `.env`,
+ports in use). Run it standalone any time with `pnpm doctor`.
 
-## Building Your App
+## B2 key layout
 
-When you adapt this kit for a new app, keep the shared scaffolding and only swap out what's app-specific:
+B2 is the sole data store — there is no database.
 
-- **Keep** the UI kit (`apps/web/src/components/ui/` + design tokens in `globals.css` + `/design`).
-- **Keep** the File Explorer (`/files`) and Upload (`/upload`) pages and their sidebar nav entries — they're the reusable B2-backed surface.
-- **Adapt** the Dashboard (`/`) to your use case — replace the default stats, chart, and recent uploads with metrics that reflect what your app actually does.
-- **Rebrand** by editing a single file: `apps/web/src/lib/app-config.ts` holds the app name and description (`APP_NAME`, `APP_DESCRIPTION`). Changing them there updates the page title, sidebar, and breadcrumb everywhere — no other files to touch.
+```
+calls/{date}/{queue}/{callId}/
+    recording.{wav|mp3}     # source audio (create)
+    meta.json               # the call record (edit target); holds status
+    transcript.jsonl        # {start,end,speaker,text,emotion} per line (run writes)
+    analytics.json          # sentiment, flagged_phrases, silence_ratio, talk_time… (run writes)
+```
 
-Full contract and rationale: [AGENTS.md §2 — Building on This Starter Kit](AGENTS.md#2-building-on-this-starter-kit).
-
-## Core Features
-
-- [File Upload](docs/features/file-upload.md) — drag-and-drop upload with real-time progress
-- [File Browser](docs/features/file-browser.md) — list, preview, download, delete files
-- [Dashboard](docs/features/dashboard.md) — stats cards, upload chart, recent uploads
-- [Metadata Extraction](docs/features/metadata-extraction.md) — image dimensions, EXIF, PDF info, checksums
-- [Design System](docs/design-system.md) — tokens, primitives, AI elements, the blaze generating loader, and inline `ErrorState` / `EmptyState` patterns. Live preview at `/design`.
-- Inline error handling — fetch failures surface *what's wrong* (API offline, 401, 5xx) and offer a Retry, instead of silently rendering empty state.
-- Single-source config — one `.env` at the repo root powers both API and web app, validated at startup so misconfig fails fast with a readable message.
-- Centralized data layer — every fetch goes through TanStack Query hooks in `apps/web/src/lib/queries.ts`; cache invalidation is one call after a mutation.
-- Structural tests — verify layering rules, import boundaries, SDK containment, file size limits
-- Structured JSON logging — every request traced with `request_id` and timing
-- `/health` endpoint — B2 connectivity check
-- `/metrics` endpoint — Prometheus-format counters (request count, latency, uploads)
-- `/docs` + `/redoc` — auto-generated interactive API docs (toggle off in prod with `ENABLE_DOCS=false`)
-- Per-IP rate limiting and magic-byte upload validation — see [SECURITY.md](docs/SECURITY.md)
+`status ∈ {uploaded, processing, done, error}` lives in `meta.json`, driving a
+clean poll model. `queue`/`date` are immutable (they're encoded in the key);
+editing a call changes only mutable `meta.json` fields. Deletes are scoped to a
+single call's prefix — never bucket-wide.
 
 ## Tech Stack
 
 - TypeScript, Next.js 16, React 19, Tailwind v4, shadcn/ui, Recharts
-- TanStack Query — caching, dedup, retry, stale-while-revalidate for every fetch
-- Python 3.11+, FastAPI, boto3, Pydantic v2, Pillow, PyPDF2
+- TanStack Query — caching, dedup, polling for every fetch
+- Python 3.11+, FastAPI, boto3, Pydantic v2
+- **SpeechBrain, PyTorch, torchaudio, librosa, soundfile, scikit-learn** (local speech pipeline)
 - Backblaze B2 (S3-compatible object storage)
 - pnpm workspaces (monorepo)
 
@@ -177,40 +147,25 @@ Full contract and rationale: [AGENTS.md §2 — Building on This Starter Kit](AG
 | Command | What it does |
 |---------|-------------|
 | `pnpm dev` | Start frontend + backend |
-| `pnpm dev:web` | Frontend only |
-| `pnpm dev:api` | Backend only |
+| `pnpm dev:web` / `pnpm dev:api` | Frontend / backend only |
 | `pnpm build` | Build frontend |
-| `pnpm lint` | Lint frontend |
-| `pnpm lint:api` | Lint backend (ruff) |
-| `pnpm test:web` | Run frontend unit tests (vitest) |
-| `pnpm test:api` | Run backend tests |
-| `pnpm check:structure` | Verify layering rules |
-| `pnpm test:e2e` | Playwright e2e tests (run `pnpm --filter @vibe-coding-starter-kit/web exec playwright install chromium` once first) |
+| `pnpm lint` / `pnpm lint:api` | Lint frontend / backend (ruff) |
+| `pnpm test:web` / `pnpm test:api` | Run frontend / backend tests |
+| `pnpm check:structure` | Verify layering + SDK-containment rules |
+
+Backend tests **monkeypatch the speech engine**, so `pnpm test:api` never
+downloads a model or imports torch.
 
 ## Documentation Map
 
 | Doc | Purpose |
 |-----|---------|
 | [AGENTS.md](AGENTS.md) | Agent table of contents — start here |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System layout, layering, data flows |
-| [docs/features/](docs/features/) | Feature docs (upload, browser, dashboard, metadata) |
-| [docs/design-system.md](docs/design-system.md) | Design tokens, primitives, AI elements, loader, error/empty states |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System layout, layering, pipeline data flow |
+| [docs/features/](docs/features/) | Feature docs (call ingest, transcription/diarization, analytics, library, dashboard) |
 | [docs/app-workflows.md](docs/app-workflows.md) | User journeys |
-| [docs/dev-workflows.md](docs/dev-workflows.md) | Engineering workflows and testing |
-| [docs/SECURITY.md](docs/SECURITY.md) | Security principles |
-| [docs/RELIABILITY.md](docs/RELIABILITY.md) | Reliability expectations |
-| [docs/exec-plans/](docs/exec-plans/) | Execution plans and tech debt tracker |
-
-## Contributing
-
-Start with [AGENTS.md](AGENTS.md). It's the map — everything else is discoverable from there.
+| [docs/SECURITY.md](docs/SECURITY.md) · [docs/RELIABILITY.md](docs/RELIABILITY.md) | Security / reliability |
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Claude Agent B2 Skill
-
-Manage Backblaze B2 from your terminal using natural language (list/search, audits, stale or large file detection, security checks, safe cleanup).
-
-Repo: [https://github.com/backblaze-b2-samples/claude-skill-b2-cloud-storage](https://github.com/backblaze-b2-samples/claude-skill-b2-cloud-storage)
+MIT License — see [LICENSE](LICENSE) for details.

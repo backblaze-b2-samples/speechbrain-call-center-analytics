@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Inbox } from "lucide-react";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -14,36 +15,21 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { useFiles } from "@/lib/queries";
-import { formatDate } from "@/lib/utils";
-
-function mimeToLabel(mime: string) {
-  const map: Record<string, string> = {
-    "image/jpeg": "Image",
-    "image/png": "Image",
-    "image/gif": "Image",
-    "image/webp": "Image",
-    "application/pdf": "PDF",
-    "text/plain": "Text",
-    "text/csv": "CSV",
-    "application/json": "JSON",
-    "application/zip": "Archive",
-    "video/mp4": "Video",
-    "audio/mpeg": "Audio",
-  };
-  return map[mime] || "File";
-}
+import { useCalls } from "@/lib/queries";
+import { StatusBadge, SentimentBadge } from "@/components/calls/call-badges";
 
 export function RecentUploadsTable() {
-  const { data: files = [], isLoading, error, refetch } = useFiles("", 10);
+  const { data: calls = [], isLoading, error, refetch } = useCalls();
+  const router = useRouter();
+  const recent = calls.slice(0, 8);
 
   return (
     <Card>
       <CardHeader className="border-b border-border py-4 px-5">
-        <CardTitle className="card-title">Recent Uploads</CardTitle>
+        <CardTitle className="card-title">Recent Calls</CardTitle>
         <CardAction className="self-center">
           <Link
-            href="/files"
+            href="/calls"
             className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             View all
@@ -60,53 +46,48 @@ export function RecentUploadsTable() {
           </div>
         ) : error ? (
           <ErrorState error={error} onRetry={() => refetch()} />
-        ) : files.length === 0 ? (
+        ) : recent.length === 0 ? (
           <EmptyState
             icon={Inbox}
-            title="No uploads yet"
-            description="Head to Upload to add your first files."
+            title="No calls yet"
+            description="Head to Calls to ingest your first recording."
           />
         ) : (
           <Table className="table-fixed">
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="w-[34%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Filename
+                <TableHead className="w-[40%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Title
                 </TableHead>
-                <TableHead className="w-[14%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Size
+                <TableHead className="w-[18%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Queue
                 </TableHead>
-                <TableHead className="w-[14%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Type
+                <TableHead className="w-[20%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Sentiment
                 </TableHead>
                 <TableHead className="w-[22%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Date
-                </TableHead>
-                <TableHead className="w-[16%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Status
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {files.map((file) => (
-                <TableRow key={file.key} className="table-row-hover">
+              {recent.map((call) => (
+                <TableRow
+                  key={call.call_id}
+                  className="cursor-pointer table-row-hover"
+                  onClick={() => router.push(`/calls/${call.call_id}`)}
+                >
                   <TableCell className="font-medium">
-                    <div className="truncate">{file.filename}</div>
+                    <div className="truncate">{call.title}</div>
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-                    {file.size_human}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground whitespace-nowrap">
-                    {mimeToLabel(file.content_type)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground whitespace-nowrap">
-                    {formatDate(file.uploaded_at)}
+                  <TableCell className="capitalize text-muted-foreground whitespace-nowrap">
+                    {call.queue}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
-                      Complete
-                    </span>
+                    <SentimentBadge label={call.sentiment_label} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <StatusBadge status={call.status} />
                   </TableCell>
                 </TableRow>
               ))}

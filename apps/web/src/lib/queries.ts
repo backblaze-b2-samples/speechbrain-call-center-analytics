@@ -2,19 +2,34 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  analyzeCall,
   ApiError,
+  createCall,
+  deleteCall,
   deleteFile,
+  getCall,
+  getCallAnalytics,
+  getCallAudioUrl,
+  getCalls,
+  getCallStats,
+  getCallTranscript,
   getFileDetail,
   getFiles,
   getFileStats,
   getHealth,
   getPreviewUrl,
   getUploadActivity,
+  updateCall,
 } from "@/lib/api-client";
 import type {
+  Call,
+  CallAnalytics,
+  CreateCallInput,
   FileMetadata,
   FileMetadataDetail,
-} from "@vibe-coding-starter-kit/shared";
+  TranscriptSegment,
+  UpdateCallInput,
+} from "@speechbrain-call-center-analytics/shared";
 
 // Single source of truth for query keys. Keep these tightly scoped so that
 // invalidating "files" doesn't blow away unrelated caches, and so an IDE
@@ -29,6 +44,12 @@ export const qk = {
   preview: (key: string) => [...qk.all, "preview", key] as const,
   detail: (key: string) => [...qk.all, "detail", key] as const,
   health: () => [...qk.all, "health"] as const,
+  calls: (queue?: string, date?: string) =>
+    [...qk.all, "calls", queue ?? "", date ?? ""] as const,
+  call: (id: string) => [...qk.all, "call", id] as const,
+  callStats: () => [...qk.all, "calls", "stats"] as const,
+  transcript: (id: string) => [...qk.all, "call", id, "transcript"] as const,
+  analytics: (id: string) => [...qk.all, "call", id, "analytics"] as const,
 };
 
 export type Health = Awaited<ReturnType<typeof getHealth>>;
@@ -102,5 +123,103 @@ export function useDeleteFile() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.all });
     },
+  });
+}
+
+// --- Calls ---
+
+// Poll while any call is still processing so the library reflects the
+// pipeline's progress without a manual refresh.
+export function useCalls(queue?: string, date?: string) {
+  return useQuery<Call[], ApiError>({
+    queryKey: qk.calls(queue, date),
+    queryFn: () => getCalls(queue, date),
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((c) => c.status === "processing")
+        ? 4000
+        : false,
+  });
+}
+
+export function useCall(callId: string | undefined) {
+  return useQuery<Call, ApiError>({
+    queryKey: qk.call(callId ?? ""),
+    queryFn: () => getCall(callId as string),
+    enabled: !!callId,
+    refetchInterval: (query) =>
+      query.state.data?.status === "processing" ? 3000 : false,
+  });
+}
+
+export function useCallStats() {
+  return useQuery({
+    queryKey: qk.callStats(),
+    queryFn: getCallStats,
+  });
+}
+
+export function useCallTranscript(callId: string | undefined, enabled: boolean) {
+  return useQuery<TranscriptSegment[], ApiError>({
+    queryKey: qk.transcript(callId ?? ""),
+    queryFn: () => getCallTranscript(callId as string),
+    enabled: enabled && !!callId,
+  });
+}
+
+export function useCallAudio(callId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: [...qk.call(callId ?? ""), "audio"],
+    queryFn: () => getCallAudioUrl(callId as string),
+    enabled: enabled && !!callId,
+    // Presigned URL — regenerate well before its 1h expiry.
+    staleTime: 30 * 60_000,
+  });
+}
+
+export function useCallAnalytics(callId: string | undefined, enabled: boolean) {
+  return useQuery<CallAnalytics, ApiError>({
+    queryKey: qk.analytics(callId ?? ""),
+    queryFn: () => getCallAnalytics(callId as string),
+    enabled: enabled && !!callId,
+    retry: false,
+  });
+}
+
+export function useCreateCall() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      input,
+      onProgress,
+    }: {
+      input: CreateCallInput;
+      onProgress?: (percent: number) => void;
+    }) => createCall(input, onProgress),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.all }),
+  });
+}
+
+export function useUpdateCall() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ callId, patch }: { callId: string; patch: UpdateCallInput }) =>
+      updateCall(callId, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.all }),
+  });
+}
+
+export function useDeleteCall() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (callId: string) => deleteCall(callId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.all }),
+  });
+}
+
+export function useAnalyzeCall() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (callId: string) => analyzeCall(callId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.all }),
   });
 }

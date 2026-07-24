@@ -4,19 +4,20 @@
 ## Components
 
 - **apps/web/** — Next.js 16 frontend (App Router, Tailwind v4, shadcn/ui)
-  - Dashboard with stats, upload chart, recent uploads
-  - File upload with drag-and-drop, progress tracking
-  - File browser with preview, download, delete
+  - Call Library (scoped to the `calls/` prefix), New Call form, Call detail
+    (audio player, transcript viewer, analytics panel, run/edit/delete)
+  - QA dashboard (calls processed, audio hours, artifact fan-out, sentiment, queue mix)
+  - Retained starter surfaces: full-bucket Files browser, generic Upload, Settings, Design
   - Dark mode via `next-themes`
 - **services/api/** — FastAPI backend (layered architecture)
-  - REST API for file upload, listing, deletion
-  - B2 S3 integration via boto3
-  - File metadata extraction (images, PDFs)
-  - Health check endpoint with B2 connectivity verification
-  - Structured JSON logging with request tracing
-  - Prometheus-format metrics endpoint
+  - REST API for the Call entity: create (ingest), read, edit, delete, and
+    **run** (analyze) — see `runtime/calls.py`
+  - Fully-local **SpeechBrain pipeline** (VAD → ASR → ECAPA diarization → emotion)
+    in `repo/speech_engine.py`, orchestrated by `service/analysis.py`
+  - B2 S3 integration via boto3 (`repo/b2_client.py`, `repo/b2_storage.py`)
+  - Health check, structured JSON logging, Prometheus-format metrics, per-IP rate limiting
 - **packages/shared/** — TypeScript type definitions
-  - Mirrors Pydantic models from the API
+  - Mirrors Pydantic models from the API (files + calls)
   - Consumed by `apps/web/` as workspace dependency
 
 ## Backend Layering
@@ -60,6 +61,15 @@ services/api/
 ## Boundary Invariants
 
 - **No external SDK leakage**: `boto3` is only imported in `app/repo/`. All other layers interact with B2 through the repo interface.
+- **Speech-engine SDK containment**: `torch`, `torchaudio`, and `speechbrain`
+  are imported **only** in `app/repo/speech_engine.py` (audio decode/resample in
+  `app/repo/audio_io.py`). All imports are **lazy** (inside functions) so
+  importing the module stays cheap and the test suite never triggers a model
+  download. `service/analysis.py` orchestrates the pipeline through the
+  `speech_engine` primitives — it never imports the ML SDKs directly.
+- **Runtime device selection**: the compute device is auto-detected at runtime
+  (CUDA → Apple MPS → CPU, CPU default) in `speech_engine.get_device()`; a GPU is
+  never hard-required, and an MPS op failure demotes to CPU and retries.
 - **No raw dicts at boundaries**: All data crossing layer boundaries uses typed Pydantic models.
 - **No cross-layer mutable state**: Configuration is read-only after init, and no mutable state is shared *between* layers. Intra-layer caches/counters (the listing cache in `repo/b2_client.py`, the download counter in `repo/counter.py`, the rate-limit and metrics state in `runtime/`) are module-local and guarded by a `threading.Lock`.
 - **Validated inputs**: All HTTP inputs validated by FastAPI/Pydantic. File keys reject empty and path-traversal patterns; optional prefix confinement via `ALLOWED_KEY_PREFIX` (off by default).
@@ -74,10 +84,24 @@ services/api/
 
 ## Data Stores
 
-- **Backblaze B2** — object storage (S3-compatible API)
-  - All uploaded files stored in a single bucket
-  - File listing and metadata via S3 `list_objects_v2` / `head_object`
-  - No application database — B2 is the sole data store
+- **Backblaze B2** — object storage (S3-compatible API), the sole data store
+  (no application database). Calls are laid out by `date/queue`:
+
+  ```
+  calls/{date}/{queue}/{callId}/
+      recording.{wav|mp3}   # source audio (create)
+      meta.json             # the call record + status (edit target)
+      transcript.jsonl      # {start,end,speaker,text,emotion} per line (run writes)
+      analytics.json        # sentiment, flagged_phrases, silence_ratio, talk_time (run writes)
+  ```
+
+  - `meta.json` carries `status ∈ {uploaded, processing, done, error}`, so the
+    UI polls it rather than needing a job store.
+  - `queue`/`date` are immutable — they're part of the object key. Edits patch
+    only mutable `meta.json` fields.
+  - Listing/aggregation via `list_objects_v2`; artifact reads via `get_object`;
+    playback/downloads via `generate_presigned_url`. Deletes are scoped to a
+    single call's prefix (`delete_objects`), never bucket-wide.
 
 ## External Services
 
@@ -93,10 +117,22 @@ See [docs/SECURITY.md](docs/SECURITY.md) for full security documentation.
 
 ## Data Flows
 
-- **Upload**: Browser -> `POST /upload` (multipart) -> API validates -> service orchestrates -> repo writes to B2 -> metadata extracted -> response
-- **List**: Browser -> `GET /files` -> service calls repo -> returns file list
-- **Download**: Browser -> `GET /files/{key}/download` -> service validates key -> repo generates presigned URL -> browser downloads
-- **Delete**: Browser -> `DELETE /files/{key}` -> service validates key -> repo deletes from B2
+- **Call ingest**: Browser -> `POST /calls` (multipart audio + metadata) ->
+  `service.calls.create_call` writes `recording.*` + `meta.json` (status
+  `uploaded`) under `calls/{date}/{queue}/{callId}/` -> response
+- **Analyze (run)**: Browser -> `POST /calls/{id}/analyze` -> FastAPI
+  `BackgroundTask` runs `service.analysis.analyze_call` (semaphore-bounded):
+  reads the recording, VAD-segments, per segment {ASR, ECAPA embedding, emotion},
+  clusters embeddings into speakers, computes analytics -> writes
+  `transcript.jsonl` + `analytics.json` and flips `meta.status` to `done`
+  (or `error`). Browser polls `GET /calls/{id}` while `status == processing`.
+- **Library / dashboard**: Browser -> `GET /calls` / `GET /calls/stats` ->
+  `service.calls` lists `meta.json` under `calls/` and aggregates
+- **Detail**: `GET /calls/{id}`, `/transcript`, `/analytics`, `/audio`
+  (presigned inline playback)
+- **Edit**: `PATCH /calls/{id}` patches mutable `meta.json` fields
+- **Delete**: `DELETE /calls/{id}` -> scoped `delete_prefix` of the call's prefix
+- Retained starter file flows (`/upload`, `/files`) are unchanged.
 
 ## Observability
 
@@ -107,21 +143,27 @@ See [docs/SECURITY.md](docs/SECURITY.md) for full security documentation.
 
 ## Canonical Files
 
-- Layered API handler: `services/api/app/runtime/upload.py`
-- Service orchestration: `services/api/app/service/upload.py`
-- B2 data access (repo layer): `services/api/app/repo/b2_client.py`
-- Pydantic models: `services/api/app/types/` (`files.py`, `upload.py`, `stats.py`, `formatting.py`)
+- Call routes (run via BackgroundTasks): `services/api/app/runtime/calls.py`
+- CRUD orchestration: `services/api/app/service/calls.py`
+- Pipeline orchestration: `services/api/app/service/analysis.py`
+- SpeechBrain adapter (sole torch/speechbrain home): `services/api/app/repo/speech_engine.py`
+- Audio decode/resample: `services/api/app/repo/audio_io.py`
+- B2 data access (repo layer): `services/api/app/repo/b2_client.py`, `b2_storage.py`
+- Pydantic models: `services/api/app/types/` (`calls.py`, `files.py`, `upload.py`, `stats.py`)
 - Config (pydantic-settings): `services/api/app/config/settings.py`
-- Structural tests: `services/api/tests/test_structure.py`
-- Frontend API client: `apps/web/src/lib/api-client.ts`
+- Structural tests: `services/api/tests/test_structure.py`; call tests: `tests/test_calls.py`
+- Frontend API client: `apps/web/src/lib/api-client.ts`; hooks: `lib/queries.ts`
+- Call UI: `apps/web/src/app/calls/`, `apps/web/src/components/calls/`
 - Shared TypeScript types: `packages/shared/src/types.ts`
 
 ## Core Features
 
-- [File Upload](docs/features/file-upload.md)
-- [File Browser](docs/features/file-browser.md)
+- [Call Ingest](docs/features/call-ingest.md)
+- [Transcription & Diarization](docs/features/transcription-diarization.md)
+- [Call Analytics](docs/features/analytics.md)
+- [Call Library](docs/features/call-library.md)
 - [Dashboard](docs/features/dashboard.md)
-- [Metadata Extraction](docs/features/metadata-extraction.md)
+- Retained starter surfaces: [File Upload](docs/features/file-upload.md), [File Browser](docs/features/file-browser.md), [Metadata Extraction](docs/features/metadata-extraction.md) (generic, secondary)
 
 ## References
 

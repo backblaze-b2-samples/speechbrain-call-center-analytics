@@ -21,7 +21,7 @@ import { humanizeBytes } from "@/lib/utils";
 import type {
   FileMetadataDetail,
   FileStatus,
-} from "@vibe-coding-starter-kit/shared";
+} from "@speechbrain-call-center-analytics/shared";
 
 export interface UploadItem {
   id: string;

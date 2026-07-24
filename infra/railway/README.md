@@ -18,17 +18,22 @@ Deploy both services (web + api) on Railway.
 - **Build Command**: `pip install -r requirements.txt`
 - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
 
+> The SpeechBrain models download on first use (~1–2 GB) and the pipeline is
+> CPU/GPU compute-heavy. Give the API service a generous memory limit and a
+> persistent volume for the model cache, or run analysis on a GPU host.
+
 ## Environment Variables
 
 Set these on the API service:
 
 | Variable | Value |
 |----------|-------|
-| `B2_ENDPOINT` | Your B2 S3 endpoint |
-| `B2_KEY_ID` | Your B2 key ID |
-| `B2_APPLICATION_KEY` | Your B2 key |
+| `B2_APPLICATION_KEY_ID` | Your B2 application key ID |
+| `B2_APPLICATION_KEY` | Your B2 application key |
 | `B2_BUCKET_NAME` | Your bucket name |
+| `B2_REGION` | Your bucket region, e.g. `us-west-004` (the S3 endpoint is derived from it) |
 | `API_CORS_ORIGINS` | Your web service URL (e.g., `https://web-production-xxx.up.railway.app`) |
+| `SPEECHBRAIN_DEVICE` | Optional — pin the compute device (`cpu`, `cuda`, `mps`); auto-detected if unset |
 
 Set this on the Web service:
 

@@ -1,8 +1,14 @@
 <!-- last_verified: 2026-07-20 -->
 # Feature: Metadata Extraction
 
+> **Secondary / retained feature.** This is generic file-metadata extraction
+> inherited from the starter kit, backing the full-bucket Files browser's detail
+> panel. It is **not** part of the call-analytics pipeline (see
+> [Transcription & Diarization](transcription-diarization.md) and
+> [Call Analytics](analytics.md) for the primary feature).
+
 ## Purpose
-Extract rich metadata from uploaded files and surface it both at upload time and for already-stored objects.
+Extract rich metadata (checksums, image dimensions/EXIF, PDF info) from uploaded files and surface it both at upload time and for already-stored objects in the generic Files browser.
 
 ## Used By
 - API: `POST /upload` (called after B2 upload) — returns the full `FileMetadataDetail` in the upload response

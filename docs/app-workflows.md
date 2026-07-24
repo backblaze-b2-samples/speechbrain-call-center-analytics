@@ -1,7 +1,41 @@
-<!-- last_verified: 2026-03-10 -->
+<!-- last_verified: 2026-07-23 -->
 # App Workflows
 
-User journeys inside the application.
+User journeys inside the application. The primary journeys are the Call ones;
+the generic Upload/Files/Dashboard journeys below are the retained starter
+surfaces.
+
+## Ingest a Call
+
+- User navigates to `/calls/new`
+- Picks a WAV/MP3 recording and fills metadata: title, queue (selector),
+  date (defaults to today), expected speakers (radio), ASR quality (selector),
+  agent/customer labels, compliance keywords, notes
+- Submitting `POST /calls` writes the recording + `meta.json` under
+  `calls/{date}/{queue}/{callId}/`; "Run analysis immediately" (default on)
+  kicks off the pipeline
+- On success the user lands on the call detail page
+- See: [Call Ingest](features/call-ingest.md)
+
+## Analyze & Review a Call
+
+- On `/calls/[callId]` the user clicks **Analyze** (or **Re-analyze**)
+- Status shows **Processing**; the page polls until **Done** (or **Error**)
+- Transcript tab: timestamped, speaker-colored segments with per-segment emotion
+- Analytics tab: sentiment score/label, talk-time split, silence ratio,
+  flagged compliance phrases
+- The recording plays inline via a presigned URL
+- **Edit** opens a pre-filled dialog (queue/date read-only); **Delete** removes
+  the call's entire B2 prefix after confirmation
+- See: [Transcription & Diarization](features/transcription-diarization.md), [Call Analytics](features/analytics.md)
+
+## Browse the Call Library
+
+- User navigates to `/calls`
+- Table lists calls (newest first) with queue, date, #speakers, sentiment, status
+- Filter by queue and/or date; rows link to the detail page
+- While any call is processing the list auto-refreshes
+- See: [Call Library](features/call-library.md)
 
 ## Upload Files
 

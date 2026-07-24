@@ -37,14 +37,25 @@ When this repo is used as the foundation for a new app, the following pieces are
 
 - No backward imports across layers
 - No `boto3` outside `repo/`
+- **No `torch` / `torchaudio` / `speechbrain` outside `repo/speech_engine.py`**
+  (audio decode/resample in `repo/audio_io.py`). Import them **lazily** (inside
+  functions) so module import stays cheap and tests never download a model.
+- Device selection is runtime auto-detect (CUDA → MPS → CPU, CPU default) — never
+  hard-require a GPU.
 - No business logic in route handlers (`runtime/`)
 - All external APIs wrapped in `repo/` adapters
 - All request/response data validated at boundary (Pydantic models)
 - No shared mutable state across layers
 
+**Primary entity — Call.** A call is a B2 prefix
+`calls/{date}/{queue}/{callId}/` holding `recording.*`, `meta.json` (record +
+`status`), and — after a run — `transcript.jsonl` + `analytics.json`.
+`queue`/`date` are immutable (in the key); edits patch only `meta.json`. Deletes
+are scoped to the call prefix, never bucket-wide.
+
 **Frontend**: shadcn/ui components in `src/components/ui/` are generated — never modify them.
 
-**Data fetching**: every API call flows through TanStack Query hooks in `apps/web/src/lib/queries.ts`. No bare `useEffect + fetch` patterns. New endpoints touch three files: `runtime/<router>.py`, `lib/api-client.ts`, `lib/queries.ts`.
+**Data fetching**: every API call flows through TanStack Query hooks in `apps/web/src/lib/queries.ts`. No bare `useEffect + fetch` patterns. New endpoints touch three files: `runtime/<router>.py`, `lib/api-client.ts`, `lib/queries.ts` (plus `packages/shared/src/types.ts` for the shared type). The call endpoints follow exactly this pattern in `runtime/calls.py`.
 
 ## 4. Quality Expectations
 
@@ -64,6 +75,7 @@ When this repo is used as the foundation for a new app, the following pieces are
 |------|-------------|
 | No backward imports | `tests/test_structure.py::test_no_backward_imports` |
 | No boto3 outside repo/ | `tests/test_structure.py::test_boto3_only_in_repo` |
+| torch/speechbrain only in repo/speech_engine.py | lazy imports + AST layering check; `tests/test_calls.py` runs the pipeline with the engine monkeypatched |
 | File size < 300 lines | `tests/test_structure.py::test_file_size_limits` |
 | All layers exist | `tests/test_structure.py::test_all_layers_exist` |
 | No bare print() | `ruff` rule T20 |

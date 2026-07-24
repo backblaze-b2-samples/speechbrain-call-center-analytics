@@ -6,28 +6,36 @@ product
 
 ## Users
 
-AI coding agents and "vibe coders" (developers who lean on AI to move fast) who clone
-this kit as the foundation for a new full-stack app. Their context: they want to skip
-the boilerplate loop (dashboard, upload, file browser, cloud storage wiring) and go
-straight to building their app's unique features. They read the repo, keep the shared
-scaffolding, and rebrand + rewrite the dashboard for their own use case.
+Contact-center / CX operations, QA and compliance reviewers, and
+insurance-fintech teams that process large archives of call recordings. Their
+context: telephony audio piles up faster than anyone can listen to it, and they
+need it turned into transcripts, speaker attribution, sentiment, and
+compliance-keyword flags — without shipping sensitive customer audio to a
+third-party API. They want the recordings and every derived artifact to live in
+their own durable object storage, queryable by date and queue, feeding QA
+dashboards, compliance review, and model-retraining pipelines.
 
 ## Product Purpose
 
-A production-ready full-stack starter kit (Next.js 16 + React 19 + Tailwind v4 +
-shadcn/ui frontend, FastAPI backend) with Backblaze B2 cloud storage integrated out of
-the box. It ships a dashboard, drag-and-drop upload, and a file browser so builders
-start from a working app, not a blank page. Success = a builder can clone it, run it,
-rebrand it via one config file, and trust every screen enough to build on top without
-first fixing it.
+A full-stack sample (Next.js 16 + React 19 + Tailwind v4 + shadcn/ui frontend,
+FastAPI backend) that runs a **fully-local SpeechBrain pipeline** —
+voice-activity segmentation, ASR transcription, speaker diarization, and
+per-segment emotion/sentiment — over call recordings and stores the source
+audio plus a timestamped speaker-labeled transcript and per-call analytics on
+**Backblaze B2**, organized by `date/queue`. The story is *B2 as the durable
+storage layer for a high-volume, write-heavy AI audio workflow*: one recording
+in becomes three objects out. Success = a reviewer can ingest a call, get a
+speaker-labeled transcript and analytics with **no external API key** (B2
+credentials only), and read recordings + artifacts straight from B2 over the
+S3-compatible API.
 
 ## Brand Personality
 
-Confident, precise, quietly professional. Voice is direct and free of hype ("Stop
-wiring boilerplate and start building"). The interface should feel like a modern
-developer tool — considered, calm, trustworthy — not a marketing showpiece. It is a
-**neutral foundation** that others rebrand: the design carries craft through restraint,
-not through a strong opinionated identity of its own.
+Confident, precise, quietly professional. Voice is direct and free of hype. The
+interface should feel like a modern operations tool for QA and compliance
+reviewers — considered, calm, trustworthy — not a marketing showpiece. It
+handles sensitive customer audio, so the design earns trust through restraint
+and clarity rather than a loud identity of its own.
 
 ## Anti-references
 

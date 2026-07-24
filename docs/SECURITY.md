@@ -1,12 +1,12 @@
 <!-- last_verified: 2026-04-22 -->
 # Security
 
-Security principles and implementation for the vibe-coding-starter-kit.
+Security principles and implementation for the speechbrain-call-center-analytics.
 
 ## Trust Boundaries
 
 - **Frontend -> API**: CORS-restricted to configured origins, scoped to `GET/POST/DELETE/OPTIONS`. `allow_credentials` is `False` (no cookie/session auth today); enable it only alongside real auth and a tightened origin allowlist.
-- **API -> B2**: Authenticated via `B2_KEY_ID` + `B2_APPLICATION_KEY`, signature v4
+- **API -> B2**: Authenticated via `B2_APPLICATION_KEY_ID` + `B2_APPLICATION_KEY`, signature v4
 - **Client -> B2**: Presigned URLs for download (10-min expiry, `Content-Disposition: attachment`)
 
 ## Authentication & Multi-Tenancy

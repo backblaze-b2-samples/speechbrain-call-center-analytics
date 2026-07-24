@@ -1,17 +1,16 @@
 "use client";
 
-import { FileIcon, HardDrive, Upload, Download } from "lucide-react";
+import { PhoneCall, Clock, Database, Gauge } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
-import { useFileStats } from "@/lib/queries";
+import { useCallStats } from "@/lib/queries";
 
 export function StatsCards() {
-  const { data: stats, isLoading, error, refetch } = useFileStats();
+  const { data: stats, isLoading, error, refetch } = useCallStats();
 
-  // Surface fetch failures inline rather than rendering "0 files / 0 B" —
-  // that lies to the user about the bucket state when really the API is
-  // just unreachable.
+  // Surface fetch failures inline rather than rendering zeros — that would lie
+  // about the bucket state when the API is simply unreachable.
   if (error) {
     return (
       <Card>
@@ -23,19 +22,39 @@ export function StatsCards() {
   }
 
   const cards = [
-    { title: "Total Files", value: stats?.total_files ?? 0, icon: FileIcon },
-    { title: "Storage Used", value: stats?.total_size_human ?? "0 B", icon: HardDrive },
-    { title: "Uploads Today", value: stats?.uploads_today ?? 0, icon: Upload },
-    { title: "Total Downloads", value: stats?.total_downloads ?? 0, icon: Download },
+    {
+      title: "Calls Processed",
+      value: stats?.total_calls ?? 0,
+      sub: stats ? `${stats.calls_done} analyzed · ${stats.calls_processing} running` : "",
+      icon: PhoneCall,
+    },
+    {
+      title: "Audio Ingested",
+      value: `${stats?.audio_hours ?? 0} h`,
+      sub: "total recording time",
+      icon: Clock,
+    },
+    {
+      title: "Artifacts on B2",
+      value: stats?.artifacts_written ?? 0,
+      sub: stats ? `${stats.fan_out_ratio}× per recording` : "recording + transcript + analytics",
+      icon: Database,
+    },
+    {
+      title: "Avg Sentiment",
+      value:
+        stats?.avg_sentiment === null || stats?.avg_sentiment === undefined
+          ? "—"
+          : stats.avg_sentiment.toFixed(2),
+      sub: "-1 negative · +1 positive",
+      icon: Gauge,
+    },
   ];
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((card, i) => (
-        <Card
-          key={card.title}
-          className={`card-hover animate-fade-in-up stagger-${i + 1}`}
-        >
+        <Card key={card.title} className={`card-hover animate-fade-in-up stagger-${i + 1}`}>
           <CardHeader className="flex flex-row items-center justify-between pt-4 pb-2 px-4 space-y-0">
             <CardTitle className="text-xs font-semibold text-muted-foreground">
               {card.title}
@@ -48,7 +67,12 @@ export function StatsCards() {
             {isLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="stat-value">{card.value}</div>
+              <>
+                <div className="stat-value">{card.value}</div>
+                {card.sub && (
+                  <div className="mt-1 text-xs text-muted-foreground">{card.sub}</div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

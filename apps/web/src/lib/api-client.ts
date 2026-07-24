@@ -1,10 +1,16 @@
 import type {
+  Call,
+  CallAnalytics,
+  CallStats,
+  CreateCallInput,
   DailyUploadCount,
   FileMetadata,
   FileMetadataDetail,
   FileUploadResponse,
+  TranscriptSegment,
+  UpdateCallInput,
   UploadStats,
-} from "@vibe-coding-starter-kit/shared";
+} from "@speechbrain-call-center-analytics/shared";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -222,4 +228,105 @@ export function uploadFile(
     xhr.open("POST", `${API_BASE}/upload`);
     xhr.send(formData);
   });
+}
+
+// --- Calls (call-analytics domain) ---
+
+export async function getCalls(queue?: string, date?: string) {
+  const params = new URLSearchParams();
+  if (queue) params.set("queue", queue);
+  if (date) params.set("date", date);
+  const qs = params.toString();
+  return apiFetch<Call[]>(`/calls${qs ? `?${qs}` : ""}`);
+}
+
+export async function getCall(callId: string) {
+  return apiFetch<Call>(`/calls/${encodeURIComponent(callId)}`);
+}
+
+export async function getCallStats() {
+  return apiFetch<CallStats>("/calls/stats");
+}
+
+export async function getCallTranscript(callId: string) {
+  return apiFetch<TranscriptSegment[]>(
+    `/calls/${encodeURIComponent(callId)}/transcript`,
+  );
+}
+
+export async function getCallAnalytics(callId: string) {
+  return apiFetch<CallAnalytics>(
+    `/calls/${encodeURIComponent(callId)}/analytics`,
+  );
+}
+
+export async function getCallAudioUrl(callId: string) {
+  return apiFetch<{ url: string }>(
+    `/calls/${encodeURIComponent(callId)}/audio`,
+  );
+}
+
+export function createCall(
+  input: CreateCallInput,
+  onProgress?: (percent: number) => void,
+): Promise<Call> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const form = new FormData();
+    form.append("file", input.file);
+    form.append("title", input.title);
+    form.append("queue", input.queue);
+    form.append("date", input.date);
+    form.append("expected_speakers", input.expected_speakers);
+    form.append("asr_quality", input.asr_quality);
+    form.append("agent_label", input.agent_label);
+    form.append("customer_label", input.customer_label);
+    form.append("compliance_keywords", input.compliance_keywords);
+    form.append("notes", input.notes);
+    form.append("analyze", String(input.analyze));
+
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    });
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText));
+      } else {
+        try {
+          const body = JSON.parse(xhr.responseText);
+          reject(new ApiError(body.detail || `Create failed: ${xhr.status}`, xhr.status));
+        } catch {
+          reject(new ApiError(`Create failed: ${xhr.status}`, xhr.status));
+        }
+      }
+    });
+    xhr.addEventListener("error", () => reject(networkError()));
+    xhr.addEventListener("abort", () => reject(new ApiError("Upload aborted", 0)));
+    xhr.open("POST", `${API_BASE}/calls`);
+    xhr.send(form);
+  });
+}
+
+export async function updateCall(callId: string, patch: UpdateCallInput) {
+  return apiFetch<Call>(`/calls/${encodeURIComponent(callId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function deleteCall(callId: string) {
+  return apiFetch<{ deleted: boolean; call_id: string; objects: number }>(
+    `/calls/${encodeURIComponent(callId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function analyzeCall(callId: string) {
+  return apiFetch<{ call_id: string; status: string }>(
+    `/calls/${encodeURIComponent(callId)}/analyze`,
+    { method: "POST" },
+  );
 }

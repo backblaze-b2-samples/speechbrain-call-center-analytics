@@ -1,56 +1,52 @@
-<!-- last_verified: 2026-06-25 -->
+<!-- last_verified: 2026-07-23 -->
 # Feature: Dashboard
 
 ## Purpose
-Provide an at-a-glance overview of file storage usage and recent upload activity.
+An at-a-glance QA overview of the call-analytics workflow — throughput, audio volume, the storage fan-out, sentiment, and queue mix.
 
 ## Used By
-- UI: `/` page (dashboard home)
-- API: `GET /files/stats`, `GET /files`, `GET /files/stats/activity`
+- UI: `/` (dashboard home)
+- API: `GET /calls/stats`, `GET /calls`
 
 ## Core Functions
 - `apps/web/src/components/dashboard/stats-cards.tsx` — 4 stat cards
-- `apps/web/src/components/dashboard/recent-uploads-table.tsx` — last 10 uploads
-- `apps/web/src/components/dashboard/upload-chart.tsx` — bar chart of uploads per day
-- `apps/web/src/lib/api-client.ts` — `getFileStats()`, `getFiles()`, `getUploadActivity()`
-- `services/api/app/runtime/files.py` — `GET /files/stats` handler
-- `services/api/app/service/files.py` — `get_stats()` business logic
-- `services/api/app/repo/b2_client.py` — `get_upload_stats()` data access
+- `apps/web/src/components/dashboard/upload-chart.tsx` — calls-by-queue bar chart
+- `apps/web/src/components/dashboard/recent-uploads-table.tsx` — recent calls
+- `apps/web/src/lib/queries.ts` — `useCallStats()`, `useCalls()`
+- `services/api/app/service/calls.py` — `get_call_stats()` aggregation over `calls/` meta
+- `services/api/app/repo/b2_storage.py` — `list_prefix()`
 
 ## Canonical Files
-- Dashboard page layout: `apps/web/src/components/dashboard/stats-cards.tsx`
-- Stats service logic: `services/api/app/service/files.py`
+- Stats aggregation: `services/api/app/service/calls.py`
 
 ## Inputs
-- None (dashboard loads data automatically)
+- None (dashboard loads automatically)
 
 ## Outputs
-- `GET /files/stats` → `UploadStats` (total_files, total_size_bytes, total_size_human, uploads_today, total_downloads)
-- `GET /files` (limit 10) → `FileMetadata[]` for recent uploads table (sorted newest-first)
-- `GET /files/stats/activity?days=7` → `DailyUploadCount[]` for chart (server-side aggregation)
+- `GET /calls/stats` → `CallStats` (`total_calls`, `calls_done`, `calls_processing`, `audio_hours`, `artifacts_written`, `fan_out_ratio`, `avg_sentiment`, `queue_breakdown`)
+- `GET /calls` → recent `Call[]` for the table
 
 ## Flow
-- Page loads → three parallel API calls (stats, recent files, upload activity)
-- Stats cards display total files, storage used, uploads today, total downloads
-- Upload chart displays server-aggregated daily counts for last 7 days as bar chart after activity data is known
-- Recent uploads table shows last 10 files with filename, size, type, date, status badge
+- Page loads → two queries (stats, recent calls)
+- Cards: Calls Processed, Audio Ingested (hours), Artifacts on B2 (with the ×fan-out ratio — the "3× per recording" story), Avg Sentiment
+- Chart: calls grouped by queue
+- Table: most-recent calls with queue, sentiment, status (click-through to detail)
 
 ## Edge Cases
-- API unavailable → error states with retry where supported; activity chart does not show a false zero state while loading
-- No files uploaded → empty chart message, empty table message
-- Large file count → stats endpoint paginates through all objects using `ContinuationToken`
+- API unavailable → inline error states with retry
+- No calls → empty chart/table messages, cards show zeros only once stats are known
+- Large call count → stats paginate through all `calls/` objects via `ContinuationToken`
 
 ## UX States
-- Loading: skeleton placeholders for cards, table, and upload activity chart
-- Empty: "No files uploaded yet" / "No upload data available yet"
+- Loading: skeletons for cards, chart, table
+- Empty: "No calls yet"
 - Loaded: populated cards, chart, table
 
 ## Verification
-- Test files: `services/api/tests/test_upload_activity.py`, `services/api/tests/test_recent_files.py`
-- Required cases: stats with files, stats with empty bucket, API error fallback
+- Test files: `services/api/tests/test_calls.py` (`test_call_stats_reports_fanout`)
 - Quick verify command: `pnpm test:api`
 - Full verify command: `pnpm lint && pnpm lint:api && pnpm test:api && pnpm check:structure`
-- Pass criteria: all pytest tests green, no ruff violations
+- Pass criteria: stats report the 4-object fan-out for one analyzed call
 
 ## Related Docs
 - [ARCHITECTURE.md](../../ARCHITECTURE.md)
