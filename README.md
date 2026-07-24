@@ -18,6 +18,28 @@ retraining pipelines then read recordings + artifacts straight from B2 over the
 
 **No second API key. B2 credentials only — everything else runs on your hardware.**
 
+## What it looks like
+
+**Dashboard** — calls processed, audio hours ingested, the B2 artifact fan-out, average sentiment, a calls-by-queue chart, and a recent-calls table.
+
+![Dashboard with call-analytics metrics, a calls-by-queue chart, and recent calls](docs/images/dashboard.png)
+
+**Call Library** — every ingested call across queues and dates, with per-call speaker count, sentiment, and processing status.
+
+![Call Library table listing calls with queue, date, speakers, sentiment, and status](docs/images/call-library.png)
+
+**New Call** — the ingest form: upload telephony audio and set queue, date, expected speakers, labels, and compliance keywords.
+
+![New Call ingest form with recording upload and analysis options](docs/images/new-call.png)
+
+**Call detail — transcript** — the timestamped, speaker-labeled transcript with per-segment emotion codes, above an in-browser player for the source recording.
+
+![Call detail transcript view with speaker-labeled segments and emotion codes](docs/images/call-detail-transcript.png)
+
+**Call detail — analytics** — per-call sentiment, silence ratio, agent/customer talk-time split, and flagged compliance phrases.
+
+![Call detail analytics view with sentiment, talk-time split, and flagged phrases](docs/images/call-detail-analytics.png)
+
 ## What you get
 
 - **Call ingest** — upload WAV/MP3 telephony audio with metadata into a
