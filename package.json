@@ -17,7 +17,7 @@
     "test:e2e": "pnpm --filter @speechbrain-call-center-analytics/web exec playwright test"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^10.0.5"
   },
   "engines": {
     "node": ">=20",
